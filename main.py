@@ -279,17 +279,109 @@ with tab_reports:
                 st.error(f"Could not open report: {e}")
                 st.code(traceback.format_exc())
 
-# === SEARCH ===
+# === COLD CASE SEARCH =======================================================
 with tab_search:
     st.subheader("🔍 Cold Case Search")
-    st.caption("Load NamUs-style datasets or internal exports.")
-    path = st.text_input("Dataset Path", value=str(DEFAULT_DATASET))
-    if st.button("Load Dataset"):
-        df = load_table(Path(path))
+    st.caption("Search publicly available case data or your internal exports.")
+
+    st.markdown("""
+        <style>
+        .search-box {
+            background: rgba(0, 50, 70, 0.35);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 0 15px rgba(0,255,128,0.1);
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown('<div class="search-box">', unsafe_allow_html=True)
+
+        q1, q2 = st.columns(2)
+        with q1:
+            q_name = st.text_input("Victim Name")
+        with q2:
+            q_city = st.text_input("City")
+
+        q3, q4 = st.columns(2)
+        with q3:
+            q_state = st.text_input("State")
+        with q4:
+            q_year = st.text_input("Year")
+
+        q5, q6 = st.columns(2)
+        with q5:
+            q_status = st.selectbox(
+                "Case Type",
+                ["Any", "Identified", "Unidentified / Unknown"]
+            )
+        with q6:
+            q_race = st.text_input("Race / Ethnicity (optional)")
+
+        search_btn = st.button("Search", type="primary")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    @st.cache_data(show_spinner=False)
+    def _load_dataset(path: str) -> pd.DataFrame:
+        p = Path(path)
+        if not p.exists():
+            return pd.DataFrame()
+        return load_table(p)
+
+    if "search_df" not in st.session_state:
+        st.session_state["search_df"] = _load_dataset(str(DEFAULT_DATASET))
+
+    df = st.session_state["search_df"]
+    if search_btn:
         if df.empty:
-            st.warning("No data loaded.")
+            st.warning("No dataset loaded. Add a CSV or JSON file in the `./data` folder.")
         else:
-            st.dataframe(df.head(100), use_container_width=True)
+            cols = {c.lower(): c for c in df.columns}
+
+            def pick(*names):
+                for n in names:
+                    if n.lower() in cols:
+                        return cols[n.lower()]
+                return None
+
+            col_name = pick("Victim", "Name", "FullName", "Title")
+            col_city = pick("City")
+            col_state = pick("State", "Province")
+            col_year = pick("Year", "IncidentYear")
+            col_status = pick("Status", "CaseStatus")
+
+            res = df.copy()
+            def contains(series, val):
+                if not val.strip() or series is None:
+                    return pd.Series([True] * len(res))
+                return series.fillna("").apply(lambda x: fuzzy_contains(val, x))
+
+            def eq(series, val):
+                if not val.strip() or series is None:
+                    return pd.Series([True] * len(res))
+                return series.fillna("").str.upper() == val.strip().upper()
+
+            mask = pd.Series([True] * len(res))
+            if col_name: mask &= contains(res[col_name], q_name)
+            if col_city: mask &= contains(res[col_city], q_city)
+            if col_state: mask &= eq(res[col_state], q_state)
+            if col_year: mask &= eq(res[col_year], q_year)
+            if col_status and q_status != "Any":
+                if "unidentified" in q_status.lower():
+                    mask &= res[col_status].fillna("").str.contains("unidentified", case=False, na=False)
+                else:
+                    mask &= ~res[col_status].fillna("").str.contains("unidentified", case=False, na=False)
+
+            out = res[mask]
+            if out.empty:
+                st.warning("No matching records found.")
+            else:
+                view_cols = [c for c in [col_name, col_city, col_state, col_year, col_status] if c]
+                st.success(f"Found {len(out)} records (showing first 200).")
+                st.dataframe(out.loc[:, view_cols].head(200), use_container_width=True)
+
 
 # === PROFILER ===
 with tab_profiler:
