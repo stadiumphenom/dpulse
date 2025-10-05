@@ -1,5 +1,4 @@
 Jinja2>=3.1.6
-beautifulsoup4==4.12.2
 requests==2.32.4
 python-whois==0.9.4
 colorama==0.4.6
@@ -13,3 +12,5 @@ PyMuPDF==1.24.7
 selenium==4.28.1
 webdriver-manager==4.0.2
 undetected_chromedriver==3.5.5
+pandas>=2.0.0
+streamlit>=1.38.0
