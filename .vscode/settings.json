@@ -1,1 +1,23 @@
-"python.analysis.typeCheckingMode": "off"
+{
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/dpulse",
+    "${workspaceFolder}/service",
+    "${workspaceFolder}/datagather_modules",
+    "${workspaceFolder}/reporting_modules",
+    "${workspaceFolder}/dorking",
+    "${workspaceFolder}/apis",
+    "${workspaceFolder}/snapshotting"
+  ],
+  "python.analysis.typeCheckingMode": "off",
+  "python.linting.enabled": true,
+  "python.linting.ruffEnabled": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": true,
+    "source.organizeImports": true
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  }
+}
