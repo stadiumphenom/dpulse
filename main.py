@@ -211,21 +211,43 @@ with tab_scan:
         use_poetry = st.toggle("Use Poetry", value=_has_poetry(), help="If off, uses `python dpulse.py`")
         run_btn = st.button("Run Scan", type="primary")
 
-    if run_btn:
-        if not target.strip():
-            st.error("Please enter a target domain.")
-        else:
-            with st.spinner(f"Running DPULSE on {target}…"):
-                base = ["poetry", "run", "python"] if use_poetry and _has_poetry() else ["python"]
-                cmd = base + ["dpulse.py", target]
-                if extra_args.strip():
-                    cmd += shlex.split(extra_args.strip())
-                code, _, _ = run_streamed(cmd)
+    import dpulse
 
-            if code == 0:
-                st.success("✅ Scan completed — check ./reports/")
+if run_btn:
+    if not target.strip():
+        st.error("Please enter a target domain.")
+    else:
+        st.info(f"Running DPULSE scan for `{target}` …")
+
+        log_box = st.empty()
+
+        def _log(msg: str):
+            """Stream live logs into the UI."""
+            prev = log_box.text_area("Live Log", msg, height=200)
+            log_box.text_area("Live Log", prev + "\n" + msg, height=300)
+
+        with st.spinner("Running scan in headless mode..."):
+            result = dpulse.run_headless_scan(
+                short_domain=target.strip(),
+                report_filetype="html",
+                pagesearch_flag="n",
+                dorking_flag="n",
+                snapshotting_flag="n",
+                used_api_flag=["Empty"],
+                log_callback=_log,
+            )
+
+        if result.get("success"):
+            st.success("✅ DPULSE scan finished successfully!")
+            if result.get("report_files"):
+                st.caption("Reports generated:")
+                for f in result["report_files"]:
+                    st.code(f, language="bash")
             else:
-                st.error("❌ DPULSE returned a non-zero exit code.")
+                st.info("No reports found in ./reports/")
+        else:
+            st.error("❌ Scan failed.")
+            st.code(result.get("trace", result.get("message", "Unknown error")), language="bash")
 
 # === REPORTS ===
 with tab_reports:
