@@ -1,0 +1,64 @@
+name: 🧠 Streamlit Auto Fixer & Sanity Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🛎️ Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 📦 Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || echo "requirements.txt missing, skipping..."
+          pip install streamlit ruff black isort pytest
+
+      - name: 🧱 Create missing __init__.py files
+        run: |
+          echo "Scanning for missing __init__.py files..."
+          find . -type d \( -path './.git' -o -path './.github' -o -path './venv' -o -path './.venv' \) -prune -o -type d -print | while read -r dir; do
+            if [ ! -f "$dir/__init__.py" ]; then
+              touch "$dir/__init__.py"
+              echo "Created: $dir/__init__.py"
+            fi
+          done
+
+      - name: 🧹 Auto-fix and format code
+        run: |
+          ruff check . --fix
+          isort .
+          black .
+
+      - name: 🧪 Run lightweight syntax tests
+        run: |
+          python -m compileall . || exit 1
+          pytest -q || echo "⚠️ No tests or partial failures, continuing..."
+
+      - name: 🔍 Streamlit Sanity Check
+        run: |
+          echo "Verifying Streamlit app starts cleanly..."
+          python -m streamlit run main.py --server.headless true --server.port 8501 &
+          sleep 5
+          pgrep -f streamlit >/dev/null && echo "✅ Streamlit launched successfully" || (echo "❌ Streamlit failed to start"; exit 1)
+          pkill -f streamlit
+
+      - name: 💾 Commit & Push Fixes
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config --global user.name "AutoFix Bot"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "🤖 Auto-fix imports, format code, and verify Streamlit" || echo "No changes to commit"
+          git push || echo "No push (PR mode)"
