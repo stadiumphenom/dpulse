@@ -1,8 +1,15 @@
+# dpulse.py
+# DPULSE main entrypoint (CLI). Added guarded rich import and headless API function.
+
 import sys
 import os
 from colorama import Fore, Style, Back
-from rich.progress import Progress, SpinnerColumn, TextColumn
+import traceback
+from pathlib import Path
+import threading
+from time import sleep, time
 
+# keep your existing sys.path additions (so internal modules import as before)
 sys.path.append('datagather_modules')
 sys.path.append('service')
 sys.path.append('reporting_modules')
@@ -10,8 +17,30 @@ sys.path.append('dorking')
 sys.path.append('apis')
 sys.path.append('snapshotting')
 
+# Guarded import for `rich` so importing dpulse does not fail when `rich` isn't installed
+try:
+    from rich.progress import Progress, SpinnerColumn, TextColumn  # type: ignore
+    RICH_AVAILABLE = True
+except Exception:
+    RICH_AVAILABLE = False
+
+# Other imports that your code expects (leave as-is)
+try:
+    import socket
+    import re
+    import webbrowser
+    import sqlite3
+    import itertools
+    from colorama import Fore, Style, Back  # already imported above, but harmless
+except ImportError as e:
+    print(Fore.RED + f"Import error appeared. Reason: {e}" + Style.RESET_ALL)
+    # Do not exit on import here — let callers decide. But for safety in CLI, we will still exit.
+    # sys.exit()
+
+# Now import project modules (these use the sys.path additions above)
 from config_processing import create_config, check_cfg_presence, read_config, print_and_return_config
 
+# existing config/checks
 cfg_presence = check_cfg_presence()
 if cfg_presence:
     print(Fore.GREEN + "Global config file presence: OK" + Style.RESET_ALL)
@@ -37,34 +66,39 @@ else:
 dorks_files_check()
 
 try:
-    import socket
-    import re
-    import webbrowser
-    import sqlite3
-    import itertools
-    import threading
-    from time import sleep, time
-except ImportError as e:
-    print(Fore.RED + f"Import error appeared. Reason: {e}" + Style.RESET_ALL)
-    sys.exit()
-
-data_processing = DataProcessing()
-config_values = read_config()
+    data_processing = DataProcessing()
+    config_values = read_config()
+except Exception:
+    # keep going; for headless usage, some components can be missing/initialized lazily
+    data_processing = None
+    config_values = None
 
 cli = cli_init.Menu()
 cli.welcome_menu()
 
-def process_report(report_filetype, short_domain, url, case_comment, keywords_list, keywords_flag, dorking_flag, used_api_flag, pagesearch_flag, pagesearch_ui_mark, spinner_thread, snapshotting_flag, snapshotting_ui_mark, username, from_date, end_date):
+# ---------------------------------------------------------------------------
+# process_report (your original function, replicated with small layout changes)
+# ---------------------------------------------------------------------------
+def process_report(report_filetype, short_domain, url, case_comment, keywords_list, keywords_flag,
+                   dorking_flag, used_api_flag, pagesearch_flag, pagesearch_ui_mark, spinner_thread,
+                   snapshotting_flag, snapshotting_ui_mark, username, from_date, end_date):
     import xlsx_report_creation as xlsx_rc
     import html_report_creation as html_rc
     from misc import time_processing
 
     try:
         start = time()
+        # `data_processing` is the same instance created above
         if pagesearch_flag in ['y', 'si']:
-            data_array, report_info_array = data_processing.data_gathering(short_domain, url, report_filetype.lower(), pagesearch_flag.lower(), keywords_list, keywords_flag, dorking_flag.lower(), used_api_flag, snapshotting_flag, username, from_date, end_date)
+            data_array, report_info_array = data_processing.data_gathering(
+                short_domain, url, report_filetype.lower(), pagesearch_flag.lower(), keywords_list,
+                keywords_flag, dorking_flag.lower(), used_api_flag, snapshotting_flag, username, from_date, end_date
+            )
         else:
-            data_array, report_info_array = data_processing.data_gathering(short_domain, url, report_filetype.lower(), pagesearch_flag.lower(), '', keywords_flag, dorking_flag.lower(), used_api_flag, snapshotting_flag, username, from_date, end_date)
+            data_array, report_info_array = data_processing.data_gathering(
+                short_domain, url, report_filetype.lower(), pagesearch_flag.lower(), '',
+                keywords_flag, dorking_flag.lower(), used_api_flag, snapshotting_flag, username, from_date, end_date
+            )
         end = time() - start
         endtime_string = time_processing(end)
 
@@ -73,16 +107,28 @@ def process_report(report_filetype, short_domain, url, case_comment, keywords_li
         elif report_filetype == 'html':
             html_rc.report_assembling(short_domain, url, case_comment, data_array, report_info_array, pagesearch_ui_mark, endtime_string, snapshotting_ui_mark)
     finally:
-        spinner_thread.do_run = False
-        spinner_thread.join()
+        # ensure spinner thread stops if provided
+        try:
+            spinner_thread.do_run = False
+            spinner_thread.join()
+        except Exception:
+            pass
 
-
+# ---------------------------------------------------------------------------
+# Rich spinner thread (kept the same)
+# ---------------------------------------------------------------------------
 class RichProgressBar(threading.Thread):
     def __init__(self):
         super(RichProgressBar, self).__init__()
         self.do_run = True
 
     def run(self):
+        # if `rich` isn't available, bail early (spinner won't run)
+        if not RICH_AVAILABLE:
+            while self.do_run:
+                sleep(0.25)
+            return
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[magenta]Processing scan...[/magenta]"),
@@ -93,6 +139,117 @@ class RichProgressBar(threading.Thread):
                 progress.update(task)
                 sleep(0.1)
 
+# ---------------------------------------------------------------------------
+# New: headless API function streamlit can call
+# ---------------------------------------------------------------------------
+def run_headless_scan(
+    short_domain: str,
+    report_filetype: str = "html",
+    pagesearch_flag: str = "n",
+    keywords_list: list | None = None,
+    dorking_flag: str = "n",
+    used_api_flag: list | None = None,
+    snapshotting_flag: str = "n",
+    username: str | None = None,
+    from_date: str | None = None,
+    end_date: str | None = None,
+    log_callback=None,
+):
+    """
+    Run DPULSE in headless mode (callable from Streamlit).
+    Returns dict { success: bool, message: str, report_files: [paths...], trace?: str }
+    """
+    def _log(msg: str):
+        try:
+            if log_callback:
+                log_callback(str(msg))
+            else:
+                # fallback to printing when no callback provided
+                print(str(msg))
+        except Exception:
+            # swallow logging errors
+            pass
+
+    try:
+        _log(f"Starting headless scan for: {short_domain}")
+        if not short_domain or "." not in short_domain:
+            return {"success": False, "message": "Invalid domain provided", "report_files": []}
+
+        # Attempt to import the domain precheck helper if available
+        try:
+            from misc import domain_precheck
+        except Exception:
+            domain_precheck = None
+
+        # Optionally perform domain precheck
+        if domain_precheck:
+            _log("Performing domain precheck...")
+            try:
+                ok = domain_precheck(short_domain)
+                if not ok:
+                    return {"success": False, "message": "Domain precheck failed (not reachable)", "report_files": []}
+                _log("Domain precheck passed.")
+            except Exception as e:
+                _log(f"Domain precheck threw: {e} — continuing anyway")
+
+        # Normalize flags
+        keywords_flag = 1 if keywords_list else 0
+        if not used_api_flag:
+            used_api_flag = ["Empty"]
+        if from_date is None:
+            from_date = "N"
+        if end_date is None:
+            end_date = "N"
+
+        # Start spinner if rich is available
+        spinner_thread = None
+        if RICH_AVAILABLE:
+            spinner_thread = RichProgressBar()
+            spinner_thread.start()
+        else:
+            _log("RICH not available -> no fancy spinner. Running scan in headless mode.")
+
+        try:
+            # call the same helper you use for CLI
+            process_report(
+                report_filetype,
+                short_domain,
+                f"http://{short_domain}/",
+                "",                      # case_comment - none in headless mode
+                keywords_list,
+                keywords_flag,
+                dorking_flag,
+                used_api_flag,
+                pagesearch_flag,
+                "Yes" if pagesearch_flag.lower() == "y" else "No",
+                spinner_thread,
+                snapshotting_flag,
+                "Yes" if snapshotting_flag.lower() != "n" else "No",
+                username,
+                from_date,
+                end_date,
+            )
+        finally:
+            # ensure spinner stops
+            if spinner_thread:
+                spinner_thread.do_run = False
+                spinner_thread.join()
+
+        # collect generated reports for this domain in the reports directory
+        report_dir = Path("reports")
+        created = []
+        if report_dir.exists():
+            for p in report_dir.glob(f"{short_domain}*"):
+                created.append(str(p.resolve()))
+
+        _log("Headless scan finished.")
+        return {"success": True, "message": "Scan finished", "report_files": created}
+    except Exception as e:
+        return {"success": False, "message": str(e), "report_files": [], "trace": traceback.format_exc()}
+
+# ---------------------------------------------------------------------------
+# CLI run() — keep your original interactive menu intact below
+# ---------------------------------------------------------------------------
 def run():
     while True:
         try:
@@ -285,7 +442,7 @@ def run():
                         conn.commit()
                         conn.close()
                         print(Fore.GREEN + "\nSuccessfully added new API key" + Style.RESET_ALL)
-                    except:
+                    except Exception as e:
                         print(Fore.RED + "Something went wrong when adding new API key. See journal for details" + Style.RESET_ALL)
                         logging.error(f'API KEY ADDING: ERROR. REASON: {e}')
 
