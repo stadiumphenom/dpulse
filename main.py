@@ -15,7 +15,6 @@ import json
 import time
 import glob
 import shlex
-import zipfile
 import traceback
 import subprocess
 from pathlib import Path
