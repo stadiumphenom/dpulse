@@ -1,5 +1,4 @@
 {
-  "python.analysis.autoImportCompletions": true,
   "python.analysis.extraPaths": [
     "${workspaceFolder}",
     "${workspaceFolder}/dpulse",
@@ -11,8 +10,6 @@
     "${workspaceFolder}/snapshotting"
   ],
   "python.analysis.typeCheckingMode": "off",
-  "python.linting.enabled": true,
-  "python.linting.ruffEnabled": true,
   "editor.codeActionsOnSave": {
     "source.fixAll": true,
     "source.organizeImports": true
