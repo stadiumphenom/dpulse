@@ -1,12 +1,7 @@
 [theme]
 base = "dark"
-primaryColor = "#00C896"
-backgroundColor = "#000000"
-secondaryBackgroundColor = "#0A0A0A"
-textColor = "#00FF41"
-font = "monospace"
-
-[server]
-headless = true
-enableCORS = false
-enableXsrfProtection = true
+primaryColor = "#00c896"               # Soft teal accent
+backgroundColor = "#0f1620"            # Deep midnight blue
+secondaryBackgroundColor = "#1b2430"   # Slight contrast for cards, panels
+textColor = "#E2E8F0"                  # Soft white-gray
+font = "monospace"                     # Terminal aesthetic
