@@ -5,6 +5,12 @@
 # - Streamlit Cloud entry point (rename-safe)
 # - Works locally or on VPS; auto-detects Poetry
 
+import sys
+try:
+    import distutils
+except ModuleNotFoundError:
+    import setuptools as distutils
+
 from __future__ import annotations
 
 import os
