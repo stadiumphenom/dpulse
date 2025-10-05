@@ -1,0 +1,7 @@
+[theme]
+base="dark"
+primaryColor="#00FF41"         # Matrix green
+backgroundColor="#000000"      # pure black
+secondaryBackgroundColor="#0D0208"  # near-black
+textColor="#00FF41"            # neon green text
+font="monospace"
