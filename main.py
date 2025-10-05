@@ -4,15 +4,12 @@
 # Tabs: Scanner, Reports, Cold Case Search, Profiler
 # - Streamlit Cloud entry point (rename-safe)
 # - Works locally or on VPS; auto-detects Poetry
-
+from __future__ import annotations
 import sys
 try:
     import distutils
 except ModuleNotFoundError:
     import setuptools as distutils
-
-from __future__ import annotations
-
 import os
 import json
 import time
