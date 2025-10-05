@@ -47,23 +47,60 @@ PROFILER_API_URL = os.getenv("PROFILER_API_URL", "").strip()
 st.set_page_config(page_title="Cold Case Console", page_icon="🧠", layout="wide")
 
 # Inline CSS (Matrix inspired)
-st.markdown(
-    """
-    <style>
-      .stApp { background: #0f1620; color: #00FF41; }
-      .stTabs [data-baseweb="tab"] { font-weight:600; }
-      .small-note { opacity:.75;font-size:.9rem }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
-      .pill { padding:4px 10px;border-radius:999px;background:#001a10;color:#90EE90;margin-right:8px;display:inline-block }
-      a, a:visited { color: #00FF41; text-decoration: none; }
-      a:hover { text-decoration: underline; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<style>
+/* App background and global text */
+.stApp {
+    background-color: #0f1620;
+    color: #E2E8F0;
+}
 
-st.title(APP_TITLE)
-st.caption("Profiling ≠ guessing — We merge availability, geography, and behavior to surface credible leads.")
+/* Tabs and header feel */
+.stTabs [data-baseweb="tab"] {
+    font-weight: 600;
+    color: #A7F3D0;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: #00c896;
+    border-bottom: 3px solid #00c896;
+}
+
+/* Softened highlight elements */
+.pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #1b2430;
+    color: #A7F3D0;
+    margin-right: 8px;
+    display: inline-block;
+}
+
+/* Subtle monospace style for technical content */
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+/* Notes and captions */
+.small-note {
+    opacity: 0.75;
+    font-size: 0.9rem;
+}
+
+/* Buttons: glow slightly when hovered */
+.stButton button {
+    background-color: #00c896;
+    color: #0f1620;
+    font-weight: bold;
+    border-radius: 6px;
+    border: none;
+    transition: all 0.2s ease;
+}
+.stButton button:hover {
+    background-color: #00a67d;
+    transform: scale(1.02);
+}
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # UTILITIES
